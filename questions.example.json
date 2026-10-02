@@ -1,0 +1,31 @@
+[
+  {
+    "question": "In which city was the person who is considered the founder of the theory of algorithms and who has a famous test named after him born?",
+    "language": "en",
+    "gold": ["London", "Maida Vale"]
+  },
+  {
+    "question": "What is the nationality of the mathematician after whom the programming construct 'Dijkstra's algorithm' is named?",
+    "language": "en",
+    "gold": ["Dutch", "Netherlands"]
+  },
+  {
+    "question": "Who was the doctoral advisor of the physicist who formulated the uncertainty principle?",
+    "language": "en",
+    "stop_criterion": "The physicist behind the uncertainty principle is identified AND their doctoral advisor is confirmed by a read Wikipedia section.",
+    "gold": ["Arnold Sommerfeld", "Sommerfeld"]
+  },
+  {
+    "question": "What programming language did the creator of Python design, and in what year was its first release?",
+    "language": "en",
+    "gold": ["1991"]
+  },
+  {
+    "question": "В каком университете работал математик, в честь которого назван язык программирания или парадигма, связанная с обратной польской записью? Назови учёного и вуз.",
+    "language": "ru"
+  },
+  {
+    "question": "Which award did the author of the paper 'Attention Is All You Need' co-authors' company DeepMind win, and who founded DeepMind?",
+    "language": "en"
+  }
+]
