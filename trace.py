@@ -19,6 +19,11 @@ class Trace:
     language: str
     backend: str
     model: str
+    resolved_model: str = ""
+    json_mode: str = ""
+    gold: object = None
+    expect_abstention: bool = False
+    repeat: int = 1
     stop_criterion: str = ""
     stop_criterion_source: str = ""
     sub_questions: list = field(default_factory=list)
@@ -33,6 +38,10 @@ class Trace:
     stopped_reason: str = ""
     voluntary_finish: bool = True
     relevance_checked: bool = False
+    relevance: dict = field(default_factory=dict)
+    grounding_rejections: int = 0
+    llm_calls: int = 0
+    token_usage: dict = field(default_factory=dict)
 
     def to_dict(self):
         d = asdict(self)
@@ -46,13 +55,36 @@ class Trace:
         L = []
         L.append(f"# Deep Research trace: {self.question}\n")
         L.append(f"- Language: `{self.language}`  ")
-        L.append(f"- Backend / model: `{self.backend}` / `{self.model}`  ")
+        L.append(f"- Backend / requested model: `{self.backend}` / `{self.model}`  ")
+        resolved = self.resolved_model or "(not reported)"
+        mismatch = (" **(differs from the requested identifier — server-side redirect)**"
+                    if self.resolved_model and self.resolved_model != self.model else "")
+        L.append(f"- Model that actually answered: `{resolved}`{mismatch}  ")
+        L.append(f"- JSON mode: {self.json_mode or 'n/a'}  ")
         L.append(f"- Started (UTC): {self.started_at}  ")
         L.append(f"- Elapsed: {self.elapsed_sec:.1f} s  ")
         L.append(f"- Steps: {len(self.steps)}  ")
+        L.append(f"- Run (repeat index): {self.repeat}  ")
         L.append(f"- Stopped: {self.stopped_reason}  ")
         L.append(f"- Voluntary finish: {self.voluntary_finish}  ")
-        L.append(f"- Relevance-checked: {self.relevance_checked}\n")
+        L.append(f"- Grounding-gate rejections: {self.grounding_rejections}  ")
+        L.append(f"- Relevance-checked: {self.relevance_checked}  ")
+        if self.relevance:
+            verdict = "supported" if self.relevance.get("supported") else "NOT supported"
+            L.append(f"- Relevance judge: **{verdict}** over "
+                     f"{self.relevance.get('observations', 0)} read passage(s) — "
+                     f"{self.relevance.get('reasoning', '')}  ")
+        if self.token_usage:
+            u = self.token_usage
+            L.append(f"- LLM calls: {self.llm_calls} — tokens: "
+                     f"{u.get('total_tokens', 0)} total "
+                     f"({u.get('prompt_tokens', 0)} prompt / "
+                     f"{u.get('completion_tokens', 0)} completion)  ")
+        if self.gold is not None or self.expect_abstention:
+            gold = "(abstention expected)" if self.expect_abstention else (
+                ", ".join(self.gold) if isinstance(self.gold, list) else str(self.gold))
+            L.append(f"- Reference (gold): {gold}  ")
+        L.append("")
         L.append("## Stopping criterion")
         L.append(f"_{self.stop_criterion_source}_: {self.stop_criterion}\n")
         if self.sub_questions:

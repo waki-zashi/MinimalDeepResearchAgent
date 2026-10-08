@@ -153,3 +153,153 @@ def test_markdown_render_smoke():
     assert "# Deep Research trace" in md
     assert "Stopping criterion" in md
     assert "Sources (provenance)" in md
+
+
+class EmptySectionWiki(FakeWiki):
+    def read_section(self, title, section="0", lang=None, char_limit=None):
+        return {"title": title, "requested_title": title, "redirected": False,
+                "section": str(section), "text": "", "truncated": False}
+
+
+class TinySectionWiki(FakeWiki):
+    def read_section(self, title, section="0", lang=None, char_limit=None):
+        return {"title": title, "requested_title": title, "redirected": False,
+                "section": str(section), "text": "See also.", "truncated": False}
+
+
+def _read_then_finish_script():
+    return [
+        '{"sub_questions":[],"stop_criterion":"x","plan":"y"}',
+        '{"thought":"read","sufficiency_note":"n/a","action":"read_section",'
+        '"action_input":{"title":"Alan Turing","section":"1"}}',
+        '{"thought":"done","sufficiency_note":"met","action":"finish","action_input":'
+        '{"answer":"London","sufficiency":{"met":true,"confidence":1.0,"justification":"read it"}}}',
+    ]
+
+
+def test_empty_section_is_not_counted_as_grounding():
+    cfg = Config(backend="groq", max_steps=3)
+    agent = DeepResearchAgent(ScriptedLLM(_read_then_finish_script()), EmptySectionWiki(), cfg)
+    trace = agent.run(Task("Where was Alan Turing born?", language="en"))
+    assert agent.has_grounded(trace) is False
+    assert trace.grounding_rejections == 1
+    assert trace.sufficiency.get("met") is False
+    assert "grounding gate" in trace.sufficiency.get("justification", "")
+    assert trace.voluntary_finish is False
+
+
+def test_near_empty_section_is_not_counted_as_grounding():
+    cfg = Config(backend="groq", max_steps=3)
+    agent = DeepResearchAgent(ScriptedLLM(_read_then_finish_script()), TinySectionWiki(), cfg)
+    trace = agent.run(Task("Where was Alan Turing born?", language="en"))
+    assert agent.has_grounded(trace) is False
+    assert trace.sufficiency.get("met") is False
+
+
+def test_real_section_body_still_counts_as_grounding():
+    cfg = Config(backend="groq", max_steps=3)
+    agent = DeepResearchAgent(ScriptedLLM(_read_then_finish_script()), FakeWiki(), cfg)
+    trace = agent.run(Task("Where was Alan Turing born?", language="en"))
+    assert agent.has_grounded(trace) is True
+    assert trace.grounding_rejections == 0
+    assert trace.sufficiency.get("met") is True
+    assert trace.voluntary_finish is True
+
+
+def test_ungrounded_finish_takes_the_same_path_on_the_last_step():
+    cfg = Config(backend="groq", max_steps=1)
+    scripted = [
+        '{"sub_questions":[],"stop_criterion":"x","plan":"y"}',
+        '{"thought":"guess","sufficiency_note":"met","action":"finish","action_input":'
+        '{"answer":"London","sufficiency":{"met":true,"confidence":1.0,"justification":"I know it"}}}',
+    ]
+    agent = DeepResearchAgent(ScriptedLLM(scripted), FakeWiki(), cfg)
+    trace = agent.run(Task("Where was Alan Turing born?", language="en"))
+    assert trace.stopped_reason == "agent called finish"
+    assert trace.grounding_rejections == 0
+    assert trace.sufficiency.get("met") is False
+    assert "grounding gate" in trace.sufficiency.get("justification", "")
+
+
+class TelemetryLLM(ScriptedLLM):
+    def __init__(self, scripted):
+        super().__init__(scripted)
+        self.last_model = ""
+        self.last_json_mode = ""
+        self.total_usage = {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0}
+
+    def reset_usage(self):
+        self.calls = 0
+        self.total_usage = {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0}
+
+    def chat(self, messages, temperature=None, max_tokens=None, force_json=False):
+        self.last_model = "GigaChat-2-Max:1.0.0"
+        self.last_json_mode = "native"
+        self.total_usage["prompt_tokens"] += 100
+        self.total_usage["completion_tokens"] += 20
+        self.total_usage["total_tokens"] += 120
+        return super().chat(messages, temperature, max_tokens, force_json)
+
+
+def test_trace_records_responding_model_tokens_and_gold():
+    cfg = Config(backend="gigachat", max_steps=3)
+    llm = TelemetryLLM(_read_then_finish_script())
+    agent = DeepResearchAgent(llm, FakeWiki(), cfg)
+    trace = agent.run(Task("Where was Alan Turing born?", language="en",
+                           gold=["London", "Maida Vale"]))
+    assert trace.model == "GigaChat-2-Max"
+    assert trace.resolved_model == "GigaChat-2-Max:1.0.0"
+    assert trace.json_mode == "native"
+    assert trace.llm_calls == 3
+    assert trace.token_usage["total_tokens"] == 360
+    assert trace.gold == ["London", "Maida Vale"]
+    md = trace.to_markdown()
+    assert "differs from the requested identifier" in md
+    assert "Reference (gold)" in md
+
+
+def test_section_name_is_resolved_to_an_index():
+    scripted = [
+        '{"sub_questions":[],"stop_criterion":"x","plan":"y"}',
+        '{"thought":"read","sufficiency_note":"n/a","action":"read_section",'
+        '"action_input":{"title":"Alan Turing","section":"Education"}}',
+        '{"thought":"done","sufficiency_note":"met","action":"finish","action_input":'
+        '{"answer":"King\'s College","sufficiency":{"met":true,"confidence":0.9,"justification":"j"}}}',
+    ]
+    cfg = Config(backend="groq", max_steps=3)
+    agent = DeepResearchAgent(ScriptedLLM(scripted), FakeWiki(), cfg)
+    trace = agent.run(Task("Where did Turing study?", language="en"))
+    assert not trace.steps[0].observation.startswith("Tool error")
+    assert agent.has_grounded(trace) is True
+    assert trace.sources[0]["section"] == "1"
+
+
+def test_unknown_section_name_errors_with_the_valid_indices_listed():
+    scripted = [
+        '{"sub_questions":[],"stop_criterion":"x","plan":"y"}',
+        '{"thought":"read","sufficiency_note":"n/a","action":"read_section",'
+        '"action_input":{"title":"Alan Turing","section":"Nonexistent heading"}}',
+        '{"thought":"done","sufficiency_note":"n/a","action":"finish","action_input":'
+        '{"answer":"x","sufficiency":{"met":true}}}',
+    ]
+    cfg = Config(backend="groq", max_steps=3)
+    agent = DeepResearchAgent(ScriptedLLM(scripted), FakeWiki(), cfg)
+    trace = agent.run(Task("q", language="en"))
+    obs = trace.steps[0].observation
+    assert obs.startswith("Tool error")
+    assert "[0] Lead" in obs and "[1] Education" in obs
+
+
+def test_bracketed_section_index_is_accepted():
+    scripted = [
+        '{"sub_questions":[],"stop_criterion":"x","plan":"y"}',
+        '{"thought":"read","sufficiency_note":"n/a","action":"read_section",'
+        '"action_input":{"title":"Alan Turing","section":"[1]"}}',
+        '{"thought":"done","sufficiency_note":"met","action":"finish","action_input":'
+        '{"answer":"King\'s College","sufficiency":{"met":true,"confidence":0.9,"justification":"j"}}}',
+    ]
+    cfg = Config(backend="groq", max_steps=3)
+    agent = DeepResearchAgent(ScriptedLLM(scripted), FakeWiki(), cfg)
+    trace = agent.run(Task("q", language="en"))
+    assert not trace.steps[0].observation.startswith("Tool error")
+    assert trace.sources[0]["section"] == "1"

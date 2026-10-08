@@ -152,3 +152,38 @@ def test_relevance_gate_off_by_default_does_not_call_judge():
     assert trace.sufficiency.get("met") is True
     assert trace.relevance_checked is False
     assert llm.calls == len(scripted)  # no extra judge call consumed
+
+
+def test_judge_verdict_is_recorded_even_when_it_accepts():
+    scripted = [
+        '{"sub_questions":[],"stop_criterion":"x","plan":"y"}',
+        '{"thought":"read","sufficiency_note":"n/a","action":"read_section","action_input":{"title":"Alan Turing","section":"0"}}',
+        '{"thought":"done","sufficiency_note":"met","action":"finish","action_input":'
+        '{"answer":"London","sufficiency":{"met":true,"confidence":0.95,"justification":"stated"}}}',
+        '{"supported": true, "reasoning": "the passage states the birth city directly"}',
+    ]
+    cfg = Config(backend="groq", relevance_gate=True)
+    agent = DeepResearchAgent(ScriptedLLM(scripted), FakeWiki(), cfg)
+    trace = agent.run(Task("Where was Alan Turing born?", language="en"))
+    assert trace.sufficiency.get("met") is True
+    assert trace.relevance["supported"] is True
+    assert trace.relevance["observations"] == 1
+    assert "states the birth city" in trace.relevance["reasoning"]
+    assert trace.relevance["judged_answer"] == "London"
+    assert "Relevance judge: **supported**" in trace.to_markdown()
+
+
+def test_judge_verdict_is_recorded_when_it_overrides():
+    scripted = [
+        '{"sub_questions":[],"stop_criterion":"x","plan":"y"}',
+        '{"thought":"read","sufficiency_note":"n/a","action":"read_section","action_input":{"title":"Alan Turing","section":"0"}}',
+        '{"thought":"done","sufficiency_note":"met","action":"finish","action_input":'
+        '{"answer":"Dutch","sufficiency":{"met":true,"confidence":1.0,"justification":"inferred"}}}',
+        '{"supported": false, "reasoning": "nationality is inferred, not stated"}',
+    ]
+    cfg = Config(backend="groq", relevance_gate=True)
+    agent = DeepResearchAgent(ScriptedLLM(scripted), FakeWiki(), cfg)
+    trace = agent.run(Task("Nationality?", language="en"))
+    assert trace.sufficiency.get("met") is False
+    assert trace.relevance["supported"] is False
+    assert "NOT supported" in trace.to_markdown()

@@ -6,6 +6,8 @@ import re
 from agent import DeepResearchAgent, Task
 from config import Config, load_dotenv
 from llm import LLM
+from scoring import (build_summary, explicit_abstention, is_redirect, judge_verdict,
+                     score, strict_score)
 from trace import now_iso
 from wikipedia_tools import WikipediaClient
 
@@ -15,26 +17,15 @@ def slugify(s, maxlen=60):
     return s[:maxlen] or "task"
 
 
-def normalize(s):
-    return re.sub(r"\s+", " ", (s or "").lower()).strip()
-
-
-def match_gold(answer, gold):
-    if not gold:
-        return None
-    a = normalize(answer)
-    if isinstance(gold, list):
-        return any(normalize(g) in a for g in gold)
-    return normalize(gold) in a
-
-
 def load_questions(path):
     with open(path, "r", encoding="utf-8") as f:
         data = json.load(f)
     return [Task(question=item["question"],
                  stop_criterion=item.get("stop_criterion"),
                  language=item.get("language", "en"),
-                 gold=item.get("gold")) for item in data]
+                 gold=item.get("gold"),
+                 expect_abstention=item.get("expect_abstention", False))
+            for item in data]
 
 
 def main():
@@ -45,13 +36,14 @@ def main():
     p.add_argument("--gemini-model", default=None)
     p.add_argument("--gigachat-model", default=None)
     p.add_argument("--language", default="en")
-    p.add_argument("--max-steps", type=int, default=8)
+    p.add_argument("--max-steps", type=int, default=12)
     p.add_argument("--temperature", type=float, default=0.2)
     p.add_argument("--question", default=None)
     p.add_argument("--stop-criterion", default=None)
     p.add_argument("--batch", default=None)
     p.add_argument("--reports-dir", default="reports")
     p.add_argument("--relevance-gate", action="store_true")
+    p.add_argument("--repeats", type=int, default=1)
     args = p.parse_args()
 
     cfg = Config(backend=args.backend, language=args.language,
@@ -79,38 +71,65 @@ def main():
         print("Provide --question or --batch")
         return
 
-    summary = []
+    repeats = max(1, args.repeats)
+    rows = []
+    resolved_model = ""
+    json_mode = "n/a"
+    total_tokens = 0
     for i, task in enumerate(tasks, 1):
-        print(f"[{i}/{len(tasks)}] {task.question}")
-        trace = agent.run(task)
-        base = f"{i:02d}_{slugify(task.question)}"
-        with open(os.path.join(cfg.reports_dir, base + ".md"), "w", encoding="utf-8") as f:
-            f.write(trace.to_markdown())
-        with open(os.path.join(cfg.reports_dir, base + ".json"), "w", encoding="utf-8") as f:
-            f.write(trace.to_json())
-        grounded = any(s.action in {"search", "get_sections", "read_section"}
-                      and not s.observation.startswith("Tool error")
-                      for s in trace.steps)
-        summary.append({"i": i, "question": task.question, "steps": len(trace.steps),
-                        "sources": len(trace.sources), "grounded": grounded,
-                        "met": trace.sufficiency.get("met"),
-                        "answer": trace.final_answer,
-                        "match": match_gold(trace.final_answer, task.gold)})
+        for r in range(1, repeats + 1):
+            tag = f" (run {r}/{repeats})" if repeats > 1 else ""
+            print(f"[{i}/{len(tasks)}]{tag} [{task.language}] {task.question}")
+            trace = agent.run(task)
+            trace.repeat = r
+            resolved_model = trace.resolved_model or resolved_model
+            json_mode = trace.json_mode or json_mode
+            total_tokens += trace.token_usage.get("total_tokens", 0)
+            suffix = f"_r{r}" if repeats > 1 else ""
+            base = f"{i:02d}_{task.language}_{slugify(task.question)}{suffix}"
+            with open(os.path.join(cfg.reports_dir, base + ".md"), "w", encoding="utf-8") as f:
+                f.write(trace.to_markdown())
+            with open(os.path.join(cfg.reports_dir, base + ".json"), "w", encoding="utf-8") as f:
+                f.write(trace.to_json())
+            met = trace.sufficiency.get("met")
+            grounded = agent.has_grounded(trace)
+            tool_errors = sum(1 for s in trace.steps
+                              if (s.observation or "").startswith("Tool error"))
+            rows.append({"i": i, "repeat": r, "question": task.question,
+                         "language": task.language, "steps": len(trace.steps),
+                         "sources": len(trace.sources),
+                         "grounded": grounded, "tool_errors": tool_errors,
+                         "met": met, "voluntary": trace.voluntary_finish,
+                         "relevance_checked": trace.relevance_checked,
+                         "judge": judge_verdict(trace.relevance, trace.relevance_checked,
+                                                (met is not None and
+                                                 trace.sufficiency.get("justification")) or ""),
+                         "rejections": trace.grounding_rejections,
+                         "tokens": trace.token_usage.get("total_tokens", 0),
+                         "answer": trace.final_answer,
+                         "explicit": explicit_abstention(trace.final_answer),
+                         "match": score(met, trace.voluntary_finish, trace.final_answer,
+                                        task.gold, task.expect_abstention,
+                                        grounded, tool_errors),
+                         "strict": strict_score(met, trace.voluntary_finish,
+                                                trace.final_answer, task.gold,
+                                                task.expect_abstention, grounded,
+                                                tool_errors)})
 
-    lines = ["# Batch summary\n",
-             f"Backend / model: `{cfg.backend}` / `{cfg.model}` — generated {now_iso()}\n",
-             "| # | Question | Steps | Sources | Grounded | Stop met | Gold match | Answer |",
-             "|---|----------|-------|---------|----------|----------|-----------|--------|"]
-    for s in summary:
-        ans = (s["answer"] or "").replace("\n", " ").replace("|", "\\|")
-        ans = ans[:80] + "…" if len(ans) > 80 else ans
-        q = s["question"].replace("|", "\\|")
-        q = q[:60] + "…" if len(q) > 60 else q
-        match = "" if s["match"] is None else ("YES" if s["match"] else "NO")
-        lines.append(f"| {s['i']} | {q} | {s['steps']} | {s['sources']} | {s['grounded']} | {s['met']} | {match} | {ans} |")
+    redirect = (" **(server-side redirect detected)**"
+                if is_redirect(cfg.model, resolved_model) else "")
+    header = [f"Backend: `{cfg.backend}`",
+              f"Requested model: `{cfg.model}`",
+              f"Model that actually answered: `{resolved_model or '(not reported)'}`{redirect}",
+              f"JSON mode: {json_mode}",
+              f"max_steps: {cfg.max_steps} — temperature: {cfg.temperature} — "
+              f"relevance gate: {'ON' if cfg.relevance_gate else 'OFF'} — repeats: {repeats}",
+              f"Total tokens across the batch: {total_tokens}",
+              f"Generated: {now_iso()}"]
     with open(os.path.join(cfg.reports_dir, "summary.md"), "w", encoding="utf-8") as f:
-        f.write("\n".join(lines))
-    print(f"Done. Reports written to ./{cfg.reports_dir}/")
+        f.write(build_summary(header, rows, repeats))
+    print(f"Done. Reports written to ./{cfg.reports_dir}/ "
+          f"({len(rows)} runs, {total_tokens} tokens)")
 
 
 if __name__ == "__main__":

@@ -17,12 +17,22 @@ class LLMError(Exception):
     pass
 
 
+def _zero_usage():
+    return {"prompt_tokens": 0, "completion_tokens": 0, "total_tokens": 0}
+
+
 class LLM:
     def __init__(self, config):
         self.cfg = config
         self.backend = config.backend
         self._gigachat_token = None
         self._gigachat_token_expires_at = 0
+        self._giga_native_confirmed = False
+        self.last_model = ""
+        self.last_usage = {}
+        self.last_json_mode = ""
+        self.total_usage = _zero_usage()
+        self.calls = 0
         if self.backend == "groq":
             self.api_key = os.environ.get("GROQ_API_KEY")
         elif self.backend == "gemini":
@@ -33,6 +43,29 @@ class LLM:
             raise LLMError(f"Unknown backend: {self.backend}")
         if not self.api_key:
             raise LLMError(f"Missing API key for backend '{self.backend}'")
+
+    def reset_usage(self):
+        self.total_usage = _zero_usage()
+        self.calls = 0
+        self.last_model = ""
+        self.last_usage = {}
+        self.last_json_mode = ""
+
+    def _note_call(self, model, usage, json_mode):
+        usage = usage or {}
+        self.last_model = model or self.cfg.model
+        self.last_usage = usage
+        self.last_json_mode = json_mode
+        self.calls += 1
+        p = int(usage.get("prompt_tokens", usage.get("promptTokenCount", 0)) or 0)
+        c = int(usage.get("completion_tokens", usage.get("candidatesTokenCount", 0)) or 0)
+        extra = int(usage.get("thoughtsTokenCount", 0) or 0)
+        t = int(usage.get("total_tokens", usage.get("totalTokenCount", 0)) or 0)
+        if not t:
+            t = p + c + extra
+        self.total_usage["prompt_tokens"] += p
+        self.total_usage["completion_tokens"] += c + extra
+        self.total_usage["total_tokens"] += t
 
     def chat(self, messages, temperature=None, max_tokens=None, force_json=False):
         t = self.cfg.temperature if temperature is None else temperature
@@ -103,6 +136,8 @@ class LLM:
                 data = self._post(url, headers, payload)
             else:
                 raise
+        self._note_call(data.get("model"), data.get("usage", {}),
+                        "native" if "response_format" in payload else "post-hoc repair")
         return data["choices"][0]["message"]["content"]
 
     def _gemini(self, messages, temperature, max_tokens, force_json):
@@ -125,6 +160,8 @@ class LLM:
         if system_texts:
             payload["systemInstruction"] = {"parts": [{"text": "\n\n".join(system_texts)}]}
         data = self._post(url, headers, payload)
+        self._note_call(data.get("modelVersion"), data.get("usageMetadata", {}),
+                        "native" if force_json else "post-hoc repair")
         cands = data.get("candidates", [])
         if not cands:
             raise LLMError(f"No candidates returned: {json.dumps(data)[:300]}")
@@ -148,14 +185,55 @@ class LLM:
         data = self._post(url, headers, None, verify=self.cfg.gigachat_verify_ssl,
                           data={"scope": self.cfg.gigachat_scope})
         self._gigachat_token = data["access_token"]
-        self._gigachat_token_expires_at = data.get("expires_at", now + 1800)
+        self._gigachat_token_expires_at = self._normalize_expiry(data.get("expires_at"), now)
         return self._gigachat_token
 
+    @staticmethod
+    def _normalize_expiry(expires_at, now, default_ttl=1800):
+        """GigaChat returns expires_at as a Unix timestamp in MILLISECONDS. Comparing it
+        against time.time() (seconds) makes every token look valid forever, so a batch
+        running longer than the real 30-minute lifetime dies on 401 instead of refreshing."""
+        try:
+            ts = float(expires_at)
+        except (TypeError, ValueError):
+            return now + default_ttl
+        if ts > 1e11:
+            ts /= 1000.0
+        if ts <= now:
+            return now + default_ttl
+        return ts
+
     def _giga(self, messages, temperature, max_tokens, force_json):
-        token = self._giga_auth()
         url = "https://gigachat.devices.sberbank.ru/api/v1/chat/completions"
-        headers = {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
         payload = {"model": self.cfg.gigachat_model, "messages": messages,
                    "temperature": temperature, "max_tokens": max_tokens}
-        data = self._post(url, headers, payload, verify=self.cfg.gigachat_verify_ssl)
+        native = bool(force_json and self.cfg.gigachat_native_json)
+        if native:
+            payload["response_format"] = {"type": "json_object"}
+
+        def send():
+            token = self._giga_auth()
+            headers = {"Authorization": f"Bearer {token}",
+                       "Content-Type": "application/json"}
+            return self._post(url, headers, payload,
+                              verify=self.cfg.gigachat_verify_ssl)
+
+        try:
+            data = send()
+        except LLMError as e:
+            if "401" in str(e):
+                self._gigachat_token = None
+                self._gigachat_token_expires_at = 0
+                data = send()
+            elif native and not self._giga_native_confirmed:
+                self.cfg.gigachat_native_json = False
+                payload.pop("response_format", None)
+                native = False
+                data = send()
+            else:
+                raise
+        if native:
+            self._giga_native_confirmed = True
+        self._note_call(data.get("model"), data.get("usage", {}),
+                        "native" if native else "post-hoc repair")
         return data["choices"][0]["message"]["content"]
