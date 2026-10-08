@@ -1,0 +1,62 @@
+{
+  "question": "Сколько строк исходного кода содержал первый публичный выпуск интерпретатора Python?",
+  "language": "ru",
+  "backend": "gigachat",
+  "model": "GigaChat-2-Max",
+  "resolved_model": "GigaChat-2-Max",
+  "json_mode": "n/a",
+  "gold": null,
+  "expect_abstention": true,
+  "repeat": 5,
+  "stop_criterion": "Число строк указано в тексте прочитанного раздела Википедии; если ни один прочитанный раздел этого не содержит, правильный исход — сообщить о недостаточности улик и воздержаться от ответа.",
+  "stop_criterion_source": "provided by user",
+  "sub_questions": [],
+  "plan": "",
+  "steps": [
+    {
+      "n": 1,
+      "thought": "(LLM call failed)",
+      "action": "_error",
+      "action_input": {},
+      "observation": "401: {\"status\":401,\"message\":\"Token has expired\"}\n",
+      "sufficiency_note": ""
+    },
+    {
+      "n": 1,
+      "thought": "(LLM call failed)",
+      "action": "_error",
+      "action_input": {},
+      "observation": "401: {\"status\":401,\"message\":\"Token has expired\"}\n",
+      "sufficiency_note": ""
+    },
+    {
+      "n": 1,
+      "thought": "(LLM call failed)",
+      "action": "_error",
+      "action_input": {},
+      "observation": "401: {\"status\":401,\"message\":\"Token has expired\"}\n",
+      "sufficiency_note": ""
+    }
+  ],
+  "final_answer": "(no answer produced)",
+  "sufficiency": {
+    "met": false,
+    "confidence": 0.0,
+    "justification": "aborted after 3 consecutive LLM call failures: 401: {\"status\":401,\"message\":\"Token has expired\"}\n"
+  },
+  "sources": [],
+  "started_at": "2026-10-03 20:13:50Z",
+  "finished_at": "2026-10-03 20:13:55Z",
+  "elapsed_sec": 4.507654428482056,
+  "stopped_reason": "aborted after 3 consecutive LLM call failures: 401: {\"status\":401,\"message\":\"Token has expired\"}\n",
+  "voluntary_finish": false,
+  "relevance_checked": false,
+  "relevance": {},
+  "grounding_rejections": 0,
+  "llm_calls": 0,
+  "token_usage": {
+    "prompt_tokens": 0,
+    "completion_tokens": 0,
+    "total_tokens": 0
+  }
+}
