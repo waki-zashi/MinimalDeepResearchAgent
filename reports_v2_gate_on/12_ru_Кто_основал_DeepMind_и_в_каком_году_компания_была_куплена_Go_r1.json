@@ -1,0 +1,127 @@
+{
+  "question": "Кто основал DeepMind и в каком году компания была куплена Google?",
+  "language": "ru",
+  "backend": "gigachat",
+  "model": "GigaChat-2-Max",
+  "resolved_model": "GigaChat-2-Max:2.0.28.2",
+  "json_mode": "native",
+  "gold": [
+    "2014"
+  ],
+  "expect_abstention": false,
+  "repeat": 1,
+  "stop_criterion": "И основатели, и год покупки подтверждены прочитанными разделами Википедии.",
+  "stop_criterion_source": "provided by user",
+  "sub_questions": [
+    "Кто является основателями компании DeepMind?",
+    "В каком году Google приобрела компанию DeepMind?"
+  ],
+  "plan": "Сначала найдем информацию о том, кто именно основал компанию DeepMind. Затем выясним точный год приобретения этой компании компанией Google.",
+  "steps": [
+    {
+      "n": 1,
+      "thought": "Сначала нужно найти статью о DeepMind на русском языке.",
+      "action": "search",
+      "action_input": {
+        "query": "DeepMind",
+        "lang": "ru"
+      },
+      "observation": "- Google DeepMind: Google DeepMind, ранее DeepMind Technologies, — британская компания, занимающаяся искусственным интеллектом. Основана в 2010 году в Лондоне под названием\n- Хассабис, Демис: за предсказания фолдинга белков с помощью разработанной его компанией DeepMind программы AlphaFold. В декабре 2025 года американский журнал Time назвал\n- AlphaFold: программа на базе искусственного интеллекта (AI), разработанная Google DeepMind, которая выполняет предсказания пространственной структуры белка. Программа\n- Google Brain: команда была объединена с бывшей дочерней компанией Google – DeepMind и образовала Google DeepMind. Миссия Google Brain заключается в улучшении жизни людей\n- Gemini (языковая модель): семейство мультимодальных больших языковых моделей (LLM), разработанное Google DeepMind и являющееся преемником LaMDA и PaLM 2. Эта модель лежит в основе одноимённого",
+      "sufficiency_note": "Не хватает информации об основателях и дате приобретения компанией Google."
+    },
+    {
+      "n": 2,
+      "thought": "Теперь найдем точную информацию из статьи 'Google DeepMind'. Начнем с получения секций этой статьи для поиска нужной информации.",
+      "action": "get_sections",
+      "action_input": {
+        "title": "Google DeepMind",
+        "lang": "ru"
+      },
+      "observation": "Sections of 'Google DeepMind':\n[0] (Lead / introduction)\n[1] История\n[2] Направление исследований\n[3] Нейронная машина Тьюринга\n[4] Глубинное обучение с подкреплением в видеоиграх\n[5] AlphaStar\n[6] Генерация видео\n[7] Игра в го\n[8] Другие направления\n[9] DeepMind Health\n[10] Сотрудничество с университетами\n[11] Примечания",
+      "sufficiency_note": "Нужно уточнить основателей и дату приобретения компанией Google."
+    },
+    {
+      "n": 3,
+      "thought": "Основную информацию об истории создания и приобретении можно найти в разделе 'История' или во введении. Прочитаю введение для начала.",
+      "action": "read_section",
+      "action_input": {
+        "title": "Google DeepMind",
+        "section": "0",
+        "lang": "ru"
+      },
+      "observation": "Google DeepMind — section 0 [truncated]:\nGoogle DeepMind, ранее DeepMind Technologies, — британская компания, занимающаяся искусственным интеллектом. Основана в 2010 году в Лондоне под названием DeepMind Technologies. В 2014 году была приобретена Google.\n\nКомпания получила известность благодаря разработке компьютерной системы AlphaGo, победившей профессионального игрока в го.\n\nDeepMind создала нейронную сеть, способную научиться играть в видеоигры на уровне человека.\n\nВ 2020 году компания разработала программу AlphaFold 2, позволяющую решать одну из фундаментальных проблем биологической науки — предсказание структуры белка.\n\nВ 2022 году компания разработала нейросетевой алгоритм AlphaTensor, при помощи которого были найдены несколько новых алгоритмов перемножения матриц небольших размерностей. Так для матриц 4X4 алгоритм Штрассена требует 49 умножений, а AlphaTensor нашёл алгоритм, требующий 47 умножений, но работает он только для поля \n\n Z\n\n /\n \n 2\n \n Z\n\n {\\displaystyle \\mathbb {Z} /2\\mathbb {Z} }\n \n.\n\nВ апреле 2023 года компания объединилась с подразделением Google Brain и стала Google DeepMind.\n\n10 декабря 2024 года CEO компании Демис Хассабис, лауреат премии Дэна Дэвида (2020), и директор компании Джон Джампер получили Нобелевскую премию по химии за 2024 год, которая была присуждена ему за предсказание структуры белка с помощью разработанной компанией программы AlphaFold 2.\n\n↑ DeepMind exec Andrew Eland leaves to launch startup . Дата обращения: 6 февраля 2020. Архивирова [truncated]",
+      "sufficiency_note": "Необходимо проверить наличие необходимой информации в других разделах, если она не будет найдена здесь."
+    },
+    {
+      "n": 4,
+      "thought": "Из введения мы узнали, что DeepMind была основана в 2010 году и приобретена Google в 2014 году. Однако информация об основателях отсутствует. Нужно прочитать раздел 'История', чтобы узнать больше.",
+      "action": "read_section",
+      "action_input": {
+        "title": "Google DeepMind",
+        "section": "1",
+        "lang": "ru"
+      },
+      "observation": "Google DeepMind — section 1 [truncated]:\nИстория\n[править | править код]\n\nВ 2010 году Демис Хассабис, Шейн Легг, Мустафа Сулейман основали стартап DeepMind Technologies. До того Хассабис и Легг уже были знакомы по Университетскому Колледжу Лондона, где работали в подразделении вычислительной нейробиологии Gatsby (Gatsby Computational Neuroscience Unit, www.gatsby.ucl.ac.uk).\n\nВ компанию вложились большие венчурные фонды Horizons Ventures, Founders Fund, а также предприниматели Скотт Банистер и Илон Маск. Ян Таллинн был одним из ранних инвесторов и советников компании.\n\nВ 2014 DeepMind получила награду «Компания года» от Компьютерной лаборатории Кембриджского университета.\n\n26 января 2014 года Google объявил о приобретении DeepMind Technologies. По разным сообщениям сумма сделки составила от 400 до 650 миллионов долларов. Сообщается, что сделка состоялась после того, как Facebook прекратил переговоры о покупке DeepMind Technologies в 2013 году. Одним из условий сделки DeepMind с Google было создание последней коллегии по этическим проблемам искусственного интеллекта.\n\nПосле покупки Google компания стала называться Google DeepMind.\n\nВ начале сентября 2016 года компания перешла в родительскую компанию Google — Alphabet, а из её названия исчезло упоминание Google, теперь она известна как DeepMind Technologies Limited или же DeepMind. Также веб-сайт компании сменил дизайн.\n\nВ апреле 2023 года DeepMind объединилась с подразделением Google Brain и образовала Google DeepMind в рамках [truncated]",
+      "sufficiency_note": "Год основания и дата приобретения подтверждены, но еще нет информации об основателях."
+    },
+    {
+      "n": 5,
+      "thought": "Теперь у нас есть полная информация: основатели - Демис Хассабис, Шейн Легг, Мустафа Сулейман, и компания была приобретена Google в 2014 году.",
+      "action": "finish",
+      "action_input": {
+        "answer": "DeepMind была основана в 2010 году Демисом Хассабисом, Шейном Леггом и Мустафой Сулейманом. Компания была приобретена Google в 2014 году.",
+        "sufficiency": {
+          "met": true,
+          "confidence": 1.0,
+          "justification": "Информация об основателях и дате приобретения подтверждена соответствующими разделами статьи."
+        }
+      },
+      "observation": "(finished)",
+      "sufficiency_note": "Все необходимые данные собраны и подтверждены источниками."
+    }
+  ],
+  "final_answer": "DeepMind была основана в 2010 году Демисом Хассабисом, Шейном Леггом и Мустафой Сулейманом. Компания была приобретена Google в 2014 году.",
+  "sufficiency": {
+    "met": true,
+    "confidence": 1.0,
+    "justification": "Информация об основателях и дате приобретения подтверждена соответствующими разделами статьи."
+  },
+  "sources": [
+    {
+      "lang": "ru",
+      "title": "Google DeepMind",
+      "requested_title": "Google DeepMind",
+      "redirected": false,
+      "section": "0",
+      "url": "https://ru.wikipedia.org/wiki/Google_DeepMind"
+    },
+    {
+      "lang": "ru",
+      "title": "Google DeepMind",
+      "requested_title": "Google DeepMind",
+      "redirected": false,
+      "section": "1",
+      "url": "https://ru.wikipedia.org/wiki/Google_DeepMind"
+    }
+  ],
+  "started_at": "2026-10-03 20:46:09Z",
+  "finished_at": "2026-10-03 20:46:31Z",
+  "elapsed_sec": 22.071443796157837,
+  "stopped_reason": "agent called finish",
+  "voluntary_finish": true,
+  "relevance_checked": true,
+  "relevance": {
+    "checked": true,
+    "supported": true,
+    "reasoning": "The passages explicitly state that DeepMind was founded in 2010 by Demis Hassabis, Shane Legg, and Mustafa Suleyman, and it was acquired by Google in 2014.",
+    "observations": 2,
+    "judged_answer": "DeepMind была основана в 2010 году Демисом Хассабисом, Шейном Леггом и Мустафой Сулейманом. Компания была приобретена Google в 2014 году."
+  },
+  "grounding_rejections": 0,
+  "llm_calls": 7,
+  "token_usage": {
+    "prompt_tokens": 4600,
+    "completion_tokens": 672,
+    "total_tokens": 5272
+  }
+}
